@@ -26,14 +26,12 @@ pip install -e .
 
 ## MUD Indexer SDK
 
-This repository provides a Python SDK for interacting with MUD-indexed databases. It allows users to parse a MUD configuration file, register tables dynamically, and query data using a simplified API.
+The MUD Indexer SDK allows users to parse a MUD configuration file, register tables dynamically, and query data using a simplified API.
 
 ## Features
 
 - **Dynamic Table Registration:** Automatically register tables and schemas defined in a MUD configuration file.
 - **SQL-like Queries:** Perform table queries with filtering and limit support.
-- **Escaped Reserved Keywords:** Handles reserved SQL keywords in column names.
-- **Error Handling:** Provides detailed error feedback for API requests.
 
 
 ---
