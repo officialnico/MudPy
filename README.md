@@ -2,10 +2,9 @@
 
 #### Python tools for:
  
-- querying tables
+- querying mud tables
 - creating your own python game wrappers
 - interacting with worlds
-
 + more
 
 #### Use case
