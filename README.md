@@ -1,5 +1,21 @@
 # mud-aw.py
 
+#### Python tools for:
+ 
+- querying tables
+- creating your own python game wrappers
+- interacting with worlds
+
++ more
+
+#### Use case
+
+- create data dashboards of MUD worlds
+- automate in-game actions
+- create game-specific libraries for player interactions (wrappers)
+
+This is useful for 
+
 ## Installation
 
 Clone the repository and install dependencies:
