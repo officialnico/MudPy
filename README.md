@@ -17,9 +17,7 @@
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/mud-aw.py.git
-cd mud-aw.py
-pip install -e .
+pip install mud-aw.py
 ```
 
 
