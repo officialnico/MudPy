@@ -13,8 +13,6 @@ and more
 - automate in-game actions
 - create game-specific libraries for player interactions (wrappers)
 
-This is useful for 
-
 ## Installation
 
 Clone the repository and install dependencies:
