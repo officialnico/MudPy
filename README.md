@@ -5,7 +5,7 @@
 - querying mud tables
 - creating your own python game wrappers
 - interacting with worlds
-+ more
+and more
 
 #### Use case
 
