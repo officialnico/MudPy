@@ -54,13 +54,16 @@ sdk = MUDIndexerSDK(indexer_url, world_address, mud_config_path)
 
 ### 2. Query Tables
 
-Use the SDK to interact with dynamically registered tables. For example, if `Player` is defined in the MUD configuration:
+Use the SDK to interact with dynamically registered tables. For example, if `Inventory` is defined in the MUD configuration:
 
 ```python
 # Fetch tables and filter by properties
 pickaxe_balance = sdk.tables.Inventory.get(playerId=PLAYER_ID, itemId=PICKAXE_ID)
 
-# Fetch every table entry. limit is the max amount of inventories you want returned, defautls to 1000
+# Fetch every Inventory entry 
+inventories = sdk.tables.Inventory.get()
+
+# limit the amount of entries returned, defaults is 1000
 inventories = sdk.tables.Inventory.get(limit=500)
 ```
 
