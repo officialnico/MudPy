@@ -58,49 +58,23 @@ sdk = MUDIndexerSDK(indexer_url, world_address, mud_config_path)
 Use the SDK to interact with dynamically registered tables. For example, if `Player` is defined in the MUD configuration:
 
 ```python
-# Fetch up to 500 rows from the Player table with specific filters
-players = sdk.tables.Player.get(limit=500, id=1, name="JohnDoe")
+# Fetch tables and filter by properties
+pickaxe_balance = sdk.tables.Inventory.get(playerId=PLAYER_ID, itemId=PICKAXE_ID)
 
-# Print the results
-print(players)
+# Fetch every table entry. limit is the max amount of inventories you want returned, defautls to 1000
+inventories = sdk.tables.Inventory.get(limit=500)
 ```
 
 ---
 
 ### 3. Access Table Names
 
-Retrieve a list of all registered tables:
+Retrieve a list of all tables registered to the world:
 
 ```python
 table_names = sdk.get_table_names()
 print("Registered tables:", table_names)
 ```
-
----
-
-### Code Overview -- MUDIndexerSDK
-
-#### `parse_mud_config(file_path: str)`
-
-Parses the MUD configuration file to extract table names, schemas, and key definitions.
-
-#### `BaseTable`
-
-Represents a single table. Provides methods for querying data and constructing SQL queries dynamically.
-
-- **`get(limit=1000, **filters)`**: Query the table with optional filters.
-
-#### `TableRegistry`
-
-Manages the dynamic creation and registration of table instances.
-
-- **`register_table(table_name, schema, keys)`**: Registers a new table.
-
-#### `MUDIndexerSDK`
-
-Main class for initializing the SDK, parsing the configuration file, and managing API requests.
-
-- **`get_table_names()`**: Returns a list of all registered table names.
 
 ---
 
