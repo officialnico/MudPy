@@ -25,6 +25,12 @@ pip install mud-aw.py
 
 The MUD Indexer SDK allows users to parse a MUD configuration file, register tables dynamically, and query data using a simplified API.
 
+All it needs as inputs are 
+
+- MUD Indexer URL
+- World Address
+- `mud.config.ts` path
+
 ![fast_compressed_mud_sdk](https://github.com/user-attachments/assets/092bc23b-7253-4f71-a3f8-232d653386a9)
 
 ## Features
