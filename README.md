@@ -42,7 +42,7 @@ The MUD Indexer SDK allows users to parse a MUD configuration file, register tab
 Create an instance of `MUDIndexerSDK`:
 
 ```python
-from mud_indexer_sdk import MUDIndexerSDK
+from mud import MUDIndexerSDK
 
 indexer_url = "https://indexer.example.com"
 world_address = "0x123...abc"
