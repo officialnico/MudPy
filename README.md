@@ -63,7 +63,7 @@ pickaxe_balance = sdk.tables.Inventory.get(playerId=PLAYER_ID, itemId=PICKAXE_ID
 # Fetch every Inventory entry 
 inventories = sdk.tables.Inventory.get()
 
-# limit the amount of entries returned, defaults is 1000
+# limit the amount of entries returned, default is 1000
 inventories = sdk.tables.Inventory.get(limit=500)
 ```
 
