@@ -30,7 +30,7 @@ The MUD Indexer SDK allows users to parse a MUD configuration file, register tab
 ## Features
 
 - **Dynamic Table Registration:** Automatically register tables and schemas defined in a MUD configuration file.
-- **SQL-like Queries:** Perform table queries with filtering and limit support.
+- **SQL-like Queries:** Perform table queries with filtering.
 
 
 ---
