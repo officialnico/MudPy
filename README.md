@@ -78,68 +78,29 @@ print("Registered tables:", table_names)
 
 ---
 
-## Code Overview
+### Code Overview -- MUDIndexerSDK
 
-### `parse_mud_config(file_path: str)`
+#### `parse_mud_config(file_path: str)`
 
 Parses the MUD configuration file to extract table names, schemas, and key definitions.
 
-### `BaseTable`
+#### `BaseTable`
 
 Represents a single table. Provides methods for querying data and constructing SQL queries dynamically.
 
 - **`get(limit=1000, **filters)`**: Query the table with optional filters.
 
-### `TableRegistry`
+#### `TableRegistry`
 
 Manages the dynamic creation and registration of table instances.
 
 - **`register_table(table_name, schema, keys)`**: Registers a new table.
 
-### `MUDIndexerSDK`
+#### `MUDIndexerSDK`
 
 Main class for initializing the SDK, parsing the configuration file, and managing API requests.
 
 - **`get_table_names()`**: Returns a list of all registered table names.
-
----
-
-## Example MUD Configuration File
-
-```yaml
-Player:
-  schema:
-    id: "int"
-    name: "string"
-    level: "int"
-  key: ["id"]
-Monster:
-  schema:
-    id: "int"
-    type: "string"
-    strength: "int"
-  key: ["id"]
-```
-
----
-
-## Requirements
-
-- Python 3.7+
-- `requests` library
-
-Install dependencies with:
-
-```bash
-pip install requests
-```
-
----
-
-## Error Handling
-
-- If the MUD configuration file is not properly formatted, an exception will be raised during initialization.
-- API requests will throw an exception if the HTTP response status is not 200.
 
 ---
 
