@@ -1,7 +1,12 @@
 from typing import Any, Dict, List, TypedDict, Type
 import re
 import requests
+import pandas as pd
+import logging
 
+MAX_LIMIT = 9999999
+
+logging.basicConfig(level=logging.INFO)
 
 def parse_mud_config(file_path: str):
     with open(file_path, "r") as f:
@@ -69,6 +74,20 @@ class BaseTable:
         headers, *rows = results
         return [dict(zip(headers, row)) for row in rows]
 
+    
+    def to_dataframe(self, limit=MAX_LIMIT, **filters):
+        """
+        Downloads the table and converts it to a Pandas DataFrame.
+
+        Args:
+            limit (int): Maximum number of rows to retrieve. Default is MAX_LIMIT.
+            **filters: Key-value pairs to filter the query.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the table data.
+        """
+        rows = self.get(limit=limit, **filters)
+        return pd.DataFrame(rows)
 
 class TableRegistry:
     def __init__(self, sdk):
@@ -93,8 +112,29 @@ class TableRegistry:
             {k: self.SOLIDITY_TO_PYTHON_TYPE.get(v, Any) for k, v in schema.items()}
         )
 
-        def get(self, limit: int = 1000, **filters: schema_typed_dict) -> List[schema_typed_dict]:
-            return super(type(self), self).get(limit=limit, **filters)
+        def get(self, limit=1000, **filters):
+            """
+            Query the table with optional filters.
+
+            Args:
+                limit (int): Maximum number of rows to retrieve. Default is 1000.
+                **filters: Key-value pairs to filter the query.
+
+            Returns:
+                List[Dict[str, Any]]: A list of records from the table.
+            """
+            select_columns = ", ".join(self._escape_column_name(col) for col in self.schema.keys())
+            where_clause = " AND ".join(
+                f"{self._escape_column_name(key)}={repr(value)}" for key, value in filters.items()
+            )
+            query = f"SELECT {select_columns} FROM {self.table_name}"
+            if where_clause:
+                query += f" WHERE {where_clause}"
+            query += f" LIMIT {limit};"
+
+            payload = [{"address": self.sdk.world_address, "query": query}]
+            response = self.sdk.post(payload)
+            return self._parse_response(response)
 
         table_class = type(table_name, (BaseTable,), {"get": get})
         table_instance = table_class(self.sdk, table_name, schema, keys)
@@ -118,3 +158,52 @@ class MUDIndexerSDK:
 
     def get_table_names(self):
         return list(self._parsed_tables.keys())
+
+
+class MUDIndexerSDK:
+    def __init__(self, indexer_url, world_address, mud_config_path):
+        self.indexer_url = indexer_url
+        self.world_address = world_address
+        self.tables = TableRegistry(self)
+        self._parsed_tables = parse_mud_config(mud_config_path)
+        for table_name, table_info in self._parsed_tables.items():
+            self.tables.register_table(table_name, table_info["schema"], table_info["key"])
+
+    def post(self, payload):
+        response = requests.post(self.indexer_url, json=payload, headers={"Content-Type": "application/json"})
+        if response.status_code != 200:
+            raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+        return response.json()
+
+    def get_table_names(self):
+        return list(self._parsed_tables.keys())
+
+    def dl_tables_as_dataframes(self):
+        """
+        Downloads all tables from the indexer and returns them as a dictionary of Pandas DataFrames.
+
+        Returns:
+            dict: A dictionary where each key is a table name, and the value is a Pandas DataFrame.
+        """
+        table_names = self.get_table_names()
+        table_dataframes = {}
+
+        for table_name in table_names:
+            try:
+                logging.info(f"Downloading table: {table_name}")
+
+                # Fetch all rows in a single call
+                rows = self.tables.__getattribute__(table_name).get(limit=9999999)
+
+                if rows:
+                    # Convert rows to a DataFrame and store in the dictionary
+                    table_dataframes[table_name] = pd.DataFrame(rows)
+                else:
+                    logging.warning(f"No data found for table {table_name}.")
+                    table_dataframes[table_name] = pd.DataFrame()  # Empty DataFrame for consistency
+
+            except Exception as e:
+                logging.error(f"Failed to download table {table_name}: {str(e)}")
+                table_dataframes[table_name] = pd.DataFrame()  # Empty DataFrame on error
+
+        return table_dataframes
