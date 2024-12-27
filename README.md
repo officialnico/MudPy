@@ -1,5 +1,7 @@
 # mud-aw.py 🧱🐍
 
+A Python API for MUD worlds
+
 #### Python tools for:
  
 - Querying [MUD](https://mud.dev/) tables
@@ -16,10 +18,15 @@
 
 ## Installation
 
-Clone the repository and install dependencies:
-
 ```bash
 pip install mud-aw.py
+```
+
+or build from source
+
+```bash
+cd mud-aw.py
+pip install -e .
 ```
 
 ---
