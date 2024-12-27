@@ -125,7 +125,7 @@ class World:
                         selector = hex_match.group(0)[2:10]
                         if selector in self.errors:
                             contract, error = self.errors[selector]
-                            error_msg = f"{error} in {contract} when calling {func_name}"
+                            error_msg = f"{error} when calling {func_name}"
                             new_error = type(e)((error_msg,))
                             raise new_error from None
                 raise e
