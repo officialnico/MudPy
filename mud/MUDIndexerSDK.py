@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, TypedDict, Type
 import re
 import requests
 
@@ -23,7 +24,7 @@ def parse_mud_config(file_path: str):
 
 
 class BaseTable:
-    RESERVED_SQL_KEYWORDS = {"exists", "from", "values", "limit", "index"}  # Add more keywords if needed
+    RESERVED_SQL_KEYWORDS = {"exists", "from", "values", "limit", "index"}
 
     def __init__(self, sdk, table_name, schema, keys):
         self.sdk = sdk
@@ -46,25 +47,10 @@ class BaseTable:
         Returns:
             List[Dict[str, Any]]: A list of records from the table.
         """
-        # Determine the columns to select based on whether the keys are filtered
-        if any(key in filters for key in self.keys):
-            # Exclude keys from SELECT if they are filtered
-            select_columns = ", ".join(
-                self._escape_column_name(col)
-                for col in self.schema.keys()
-                if col not in self.keys
-            )
-        else:
-            # Include all columns if no keys are filtered
-            select_columns = ", ".join(
-                self._escape_column_name(col) for col in self.schema.keys()
-            )
-
-        # Construct the WHERE clause
+        select_columns = ", ".join(self.schema.keys())
         where_clause = " AND ".join(
             f"{self._escape_column_name(key)}={repr(value)}" for key, value in filters.items()
         )
-
         query = f"SELECT {select_columns} FROM {self.table_name}"
         if where_clause:
             query += f" WHERE {where_clause}"
@@ -77,11 +63,9 @@ class BaseTable:
     def _parse_response(self, response):
         if "result" not in response or not response["result"]:
             return None  # Return None if there are no results
-
         results = response["result"][0]
         if not results:  # Check if the results array is empty
             return None
-
         headers, *rows = results
         return [dict(zip(headers, row)) for row in rows]
 
@@ -89,12 +73,30 @@ class BaseTable:
 class TableRegistry:
     def __init__(self, sdk):
         self.sdk = sdk
+        self.SOLIDITY_TO_PYTHON_TYPE = self._generate_solidity_to_python_type_map()
+
+    @staticmethod
+    def _generate_solidity_to_python_type_map():
+        """
+        Generate a mapping of all Solidity integer types to Python int.
+        """
+        solidity_types = {}
+        for bits in range(8, 257, 8):
+            solidity_types[f"int{bits}"] = int
+            solidity_types[f"uint{bits}"] = int
+        solidity_types.update({"bool": bool, "address": str, "string": str, "bytes32": bytes, "bytes": bytes})
+        return solidity_types
 
     def register_table(self, table_name, schema, keys):
-        """
-        Dynamically create and register a table as an attribute of the registry.
-        """
-        table_class = type(table_name, (BaseTable,), {})
+        schema_typed_dict = TypedDict(
+            f"{table_name}Schema",
+            {k: self.SOLIDITY_TO_PYTHON_TYPE.get(v, Any) for k, v in schema.items()}
+        )
+
+        def get(self, limit: int = 1000, **filters: schema_typed_dict) -> List[schema_typed_dict]:
+            return super(type(self), self).get(limit=limit, **filters)
+
+        table_class = type(table_name, (BaseTable,), {"get": get})
         table_instance = table_class(self.sdk, table_name, schema, keys)
         setattr(self, table_name, table_instance)
 
@@ -104,8 +106,6 @@ class MUDIndexerSDK:
         self.indexer_url = indexer_url
         self.world_address = world_address
         self.tables = TableRegistry(self)
-
-        # Parse and register tables from the configuration file
         self._parsed_tables = parse_mud_config(mud_config_path)
         for table_name, table_info in self._parsed_tables.items():
             self.tables.register_table(table_name, table_info["schema"], table_info["key"])
@@ -117,6 +117,4 @@ class MUDIndexerSDK:
         return response.json()
 
     def get_table_names(self):
-        """Return a list of all table names from the parsed configuration."""
         return list(self._parsed_tables.keys())
-    
