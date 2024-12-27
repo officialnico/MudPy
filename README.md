@@ -2,7 +2,7 @@
 
 #### Python tools for:
  
-- querying mud tables
+- querying ![MUD](https://mud.dev/) tables
 - creating your own python game wrappers
 - interacting with worlds
 
