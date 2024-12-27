@@ -1,7 +1,10 @@
 from typing import Any, Dict, List, TypedDict, Type
 import re
 import requests
+import pandas as pd
+import logging
 
+logging.basicConfig(level=logging.INFO)
 
 def parse_mud_config(file_path: str):
     with open(file_path, "r") as f:
@@ -118,3 +121,62 @@ class MUDIndexerSDK:
 
     def get_table_names(self):
         return list(self._parsed_tables.keys())
+
+class MUDIndexerSDK:
+    def __init__(self, indexer_url, world_address, mud_config_path):
+        self.indexer_url = indexer_url
+        self.world_address = world_address
+        self.tables = TableRegistry(self)
+        self._parsed_tables = parse_mud_config(mud_config_path)
+        for table_name, table_info in self._parsed_tables.items():
+            self.tables.register_table(table_name, table_info["schema"], table_info["key"])
+
+    def post(self, payload):
+        print("payload", payload)
+        response = requests.post(self.indexer_url, json=payload, headers={"Content-Type": "application/json"})
+        if response.status_code != 200:
+            raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+        return response.json()
+
+    def get_table_names(self):
+        return list(self._parsed_tables.keys())
+
+    def to_dataframe(self):
+        """
+        Downloads all tables from the indexer and combines them into a single Pandas DataFrame.
+
+        Returns:
+            pd.DataFrame: A single DataFrame containing all tables combined with a `table_name` column.
+        """
+        table_names = self.get_table_names()
+        combined_data = []
+
+        for table_name in table_names:
+            try:
+                logging.info(f"Downloading table: {table_name}")
+                all_rows = []
+                offset = 0
+                limit = 1000
+
+                while True:
+                    try:
+                        rows = self.tables.__getattribute__(table_name).get(limit=limit, offset=offset)
+                        if not rows:
+                            break
+                        for row in rows:
+                            row["table_name"] = table_name  # Add table name to each row
+                        all_rows.extend(rows)
+                        offset += limit
+                    except Exception as e:
+                        logging.error(f"Error fetching rows for table {table_name}: {str(e)}")
+                        break
+
+                if all_rows:
+                    combined_data.extend(all_rows)
+                else:
+                    logging.warning(f"No data found for table {table_name}.")
+
+            except Exception as e:
+                logging.error(f"Failed to download table {table_name}: {str(e)}")
+
+        return pd.DataFrame(combined_data)
