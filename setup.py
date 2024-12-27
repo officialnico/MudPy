@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="mud-aw.py",  # Use the registered name on PyPI
     version="0.12",
-    description="Python SDK for interacting with the MUD Autonomous World framework",
+    description="Python API for interacting with the MUD Autonomous World framework",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Nico Rodriguez",
