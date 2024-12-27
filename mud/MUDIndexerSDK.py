@@ -4,6 +4,8 @@ import requests
 import pandas as pd
 import logging
 
+MAX_LIMIT = 9999999
+
 logging.basicConfig(level=logging.INFO)
 
 def parse_mud_config(file_path: str):
@@ -72,6 +74,20 @@ class BaseTable:
         headers, *rows = results
         return [dict(zip(headers, row)) for row in rows]
 
+    
+    def to_dataframe(self, limit=MAX_LIMIT, **filters):
+        """
+        Downloads the table and converts it to a Pandas DataFrame.
+
+        Args:
+            limit (int): Maximum number of rows to retrieve. Default is MAX_LIMIT.
+            **filters: Key-value pairs to filter the query.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the table data.
+        """
+        rows = self.get(limit=limit, **filters)
+        return pd.DataFrame(rows)
 
 class TableRegistry:
     def __init__(self, sdk):
@@ -143,6 +159,7 @@ class MUDIndexerSDK:
     def get_table_names(self):
         return list(self._parsed_tables.keys())
 
+
 class MUDIndexerSDK:
     def __init__(self, indexer_url, world_address, mud_config_path):
         self.indexer_url = indexer_url
@@ -153,7 +170,6 @@ class MUDIndexerSDK:
             self.tables.register_table(table_name, table_info["schema"], table_info["key"])
 
     def post(self, payload):
-        print("payload", payload)
         response = requests.post(self.indexer_url, json=payload, headers={"Content-Type": "application/json"})
         if response.status_code != 200:
             raise Exception(f"Request failed with status {response.status_code}: {response.text}")
@@ -162,42 +178,32 @@ class MUDIndexerSDK:
     def get_table_names(self):
         return list(self._parsed_tables.keys())
 
-    def to_dataframe(self):
+    def dl_tables_as_dataframes(self):
         """
-        Downloads all tables from the indexer and combines them into a single Pandas DataFrame.
+        Downloads all tables from the indexer and returns them as a dictionary of Pandas DataFrames.
 
         Returns:
-            pd.DataFrame: A single DataFrame containing all tables combined with a `table_name` column.
+            dict: A dictionary where each key is a table name, and the value is a Pandas DataFrame.
         """
         table_names = self.get_table_names()
-        combined_data = []
+        table_dataframes = {}
 
         for table_name in table_names:
             try:
                 logging.info(f"Downloading table: {table_name}")
-                all_rows = []
-                offset = 0
-                limit = 1000
 
-                while True:
-                    try:
-                        rows = self.tables.__getattribute__(table_name).get(limit=limit, offset=offset)
-                        if not rows:
-                            break
-                        for row in rows:
-                            row["table_name"] = table_name  # Add table name to each row
-                        all_rows.extend(rows)
-                        offset += limit
-                    except Exception as e:
-                        logging.error(f"Error fetching rows for table {table_name}: {str(e)}")
-                        break
+                # Fetch all rows in a single call
+                rows = self.tables.__getattribute__(table_name).get(limit=9999999)
 
-                if all_rows:
-                    combined_data.extend(all_rows)
+                if rows:
+                    # Convert rows to a DataFrame and store in the dictionary
+                    table_dataframes[table_name] = pd.DataFrame(rows)
                 else:
                     logging.warning(f"No data found for table {table_name}.")
+                    table_dataframes[table_name] = pd.DataFrame()  # Empty DataFrame for consistency
 
             except Exception as e:
                 logging.error(f"Failed to download table {table_name}: {str(e)}")
+                table_dataframes[table_name] = pd.DataFrame()  # Empty DataFrame on error
 
-        return pd.DataFrame(combined_data)
+        return table_dataframes
