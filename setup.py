@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name="mud-aw.py",  # Use the registered name on PyPI
-    version="0.12",
-    description="Python SDK for interacting with the MUD Autonomous World framework",
+    version="0.1.3",
+    description="Python API for interacting with MUD Autonomous Worlds",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Nico Rodriguez",
@@ -16,7 +16,10 @@ setup(
         "pathlib",
         "json",
         "dotenv",
-        "typing"
+        "typing",
+        "pandas",
+        "IPython",
+        "logging",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
