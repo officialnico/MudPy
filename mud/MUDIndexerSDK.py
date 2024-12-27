@@ -96,8 +96,29 @@ class TableRegistry:
             {k: self.SOLIDITY_TO_PYTHON_TYPE.get(v, Any) for k, v in schema.items()}
         )
 
-        def get(self, limit: int = 1000, **filters: schema_typed_dict) -> List[schema_typed_dict]:
-            return super(type(self), self).get(limit=limit, **filters)
+        def get(self, limit=1000, **filters):
+            """
+            Query the table with optional filters.
+
+            Args:
+                limit (int): Maximum number of rows to retrieve. Default is 1000.
+                **filters: Key-value pairs to filter the query.
+
+            Returns:
+                List[Dict[str, Any]]: A list of records from the table.
+            """
+            select_columns = ", ".join(self._escape_column_name(col) for col in self.schema.keys())
+            where_clause = " AND ".join(
+                f"{self._escape_column_name(key)}={repr(value)}" for key, value in filters.items()
+            )
+            query = f"SELECT {select_columns} FROM {self.table_name}"
+            if where_clause:
+                query += f" WHERE {where_clause}"
+            query += f" LIMIT {limit};"
+
+            payload = [{"address": self.sdk.world_address, "query": query}]
+            response = self.sdk.post(payload)
+            return self._parse_response(response)
 
         table_class = type(table_name, (BaseTable,), {"get": get})
         table_instance = table_class(self.sdk, table_name, schema, keys)
