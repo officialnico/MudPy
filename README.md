@@ -1,9 +1,10 @@
 # mud-aw.py 🧱🐍
 
+
 A Python API for MUD worlds
 
 #### Python tools for:
- 
+
 - Querying [MUD](https://mud.dev/) tables
 - Creating Python game wrappers
 - Interacting with MUD worlds
@@ -43,6 +44,16 @@ The MUD Indexer SDK provides a simplified interface for querying MUD tables.
 - Path to the `mud.config.ts` file
 
 ![fast_compressed_mud_sdk](https://github.com/user-attachments/assets/092bc23b-7253-4f71-a3f8-232d653386a9)
+
+1. **Individual Table Downloads**: Query individual tables and download their data as Pandas DataFrames.
+   ```python
+   crafting_recipe_df = sdk.tables.CraftingRecipe.to_dataframe()
+   ```
+2. **Batch Table Downloads**: Download all tables as DataFrames for analysis.
+   ```python
+   all_tables = sdk.dl_tables_as_dataframes()
+   print(all_tables["CraftingRecipe"].head())
+   ```
 
 ---
 
@@ -123,6 +134,20 @@ player_inventory = world.indexer.Inventory.get(playerId=PLAYER_ID, itemId=ITEM_I
 limited_inventories = world.indexer.Inventory.get(limit=500)
 ```
 
+#### Table Querying Methods:
+
+- **Download Individual Tables**
+   ```python
+   crafting_recipe_df = sdk.tables.CraftingRecipe.to_dataframe()
+   print(crafting_recipe_df)
+   ```
+
+- **Batch Download All Tables**
+   ```python
+   all_tables_df = sdk.dl_tables_as_dataframes()
+   print(all_tables_df["CraftingRecipe"])
+   ```
+
 ---
 
 ### 4. Initialize a Player
@@ -158,6 +183,7 @@ player = Player(env_key_name="PLAYER1")
 - **SQL-like Queries**: Query tables with filtering.
 - **Smart Contract Interactions**: Access world contract functions dynamically.
 - **Player-Specific Wrappers**: Automate transactions and player actions.
+- **Individual and Batch Table Downloads**: Flexible methods for accessing table data as DataFrames.
 
 ---
 
@@ -166,3 +192,4 @@ player = Player(env_key_name="PLAYER1")
 1. Fork the repository.
 2. Create a new feature branch.
 3. Submit a pull request.
+
