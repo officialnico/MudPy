@@ -3,6 +3,8 @@
 
 A Python API for MUD worlds
 
+**Handle hundreds of bots across multiple chains on multiple worlds**
+
 #### Python tools for:
 
 - Querying [MUD](https://mud.dev/) tables
