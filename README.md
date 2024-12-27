@@ -2,15 +2,17 @@
 
 #### Python tools for:
  
-- querying [MUD](https://mud.dev/) tables
-- creating your own python game wrappers
-- interacting with worlds
+- Querying [MUD](https://mud.dev/) tables
+- Creating Python game wrappers
+- Interacting with MUD worlds
 
-#### Use case
+#### Use Cases
 
-- create data dashboards of MUD worlds
-- automate in-game actions
-- create game-specific libraries for player interactions (wrappers)
+- Create data dashboards for MUD worlds
+- Automate in-game actions
+- Build game-specific libraries for player interactions
+
+---
 
 ## Installation
 
@@ -20,69 +22,135 @@ Clone the repository and install dependencies:
 pip install mud-aw.py
 ```
 
+---
 
-## MUD Indexer SDK
+## Key Components
 
-The MUD Indexer SDK creates an object that allows you to query tables through a simplified interface
+### **MUD Indexer SDK**
 
-All it needs as inputs are 
+The MUD Indexer SDK provides a simplified interface for querying MUD tables.
 
-- MUD Indexer URL
-- World Address
-- `mud.config.ts` path
+#### Inputs:
+- **MUD Indexer URL**
+- **World Address**
+- Path to the `mud.config.ts` file
 
 ![fast_compressed_mud_sdk](https://github.com/user-attachments/assets/092bc23b-7253-4f71-a3f8-232d653386a9)
 
-## Features
+---
 
-- **Dynamic Table Registration:** Automatically register tables and schemas defined in a MUD configuration file.
-- **SQL-like Queries:** Perform table queries with filtering.
+### **World Class**
 
+The `World` class allows you to interact with a MUD world and its smart contract functions. It dynamically registers functions based on the ABI, providing type-safe access and auto-completion in your IDE.
+
+#### Features:
+- **Smart Contract Integration**: Interact with world contract functions directly.
+- **Dynamic Typing**: Input arguments and return types are dynamically typed based on the ABI.
+- **Integrated Indexer**: Optionally link the MUD Indexer for seamless access to table data.
+
+---
+
+### **Player Class**
+
+The `Player` class simplifies interactions with a MUD world for a specific player. It can:
+- Derive the player address from a private key
+- Automatically sign and send transactions
+- Dynamically wrap world functions for player-specific interactions
 
 ---
 
 ## Usage
 
-### 1. Initialize the SDK
-Create an instance of `MUDIndexerSDK`:
+### 1. Initialize the World
+
+The `World` class connects to a MUD world and optionally integrates the MUD Indexer.
 
 ```python
-from mud import MUDIndexerSDK
+from mud import World
 
-indexer_url = "https://indexer.example.com"
+abi_dir = "./path/to/abi"
+rpc = "https://rpc.mudchain.com"
 world_address = "0x123...abc"
-mud_config_path = "path/to/mud.config"
+indexer_url = "https://indexer.mudchain.com"
+mud_config_path = "./path/to/mud.config.ts"
 
-sdk = MUDIndexerSDK(indexer_url, world_address, mud_config_path)
+# Initialize the World with an optional indexer
+world = World(
+    rpc=rpc,
+    world_address=world_address,
+    abi_dir=abi_dir,
+    indexer_url=indexer_url,
+    mud_config_path=mud_config_path
+)
 ```
 
 ---
 
-### 2. Query Tables
+### 2. Access Contract Functions
 
-Use the SDK to interact with dynamically registered tables. For example, if `Inventory` is defined in the MUD configuration:
+Functions from the world's ABI are dynamically registered on the `World` instance with type-safe signatures.
 
 ```python
-# Fetch tables and filter by properties
-pickaxe_balance = sdk.tables.Inventory.get(playerId=PLAYER_ID, itemId=PICKAXE_ID)
+# Call a smart contract function directly
+land_items = world.getLandItems(user="0x123...")
+print(land_items)
 
-# Fetch every Inventory entry 
-inventories = sdk.tables.Inventory.get()
-
-# limit the amount of entries returned, default is 1000
-inventories = sdk.tables.Inventory.get(limit=500)
+# Use IDE auto-completion for arguments and types
+world.placeItem(x=1, y=2, z=3, itemId=42)
 ```
 
 ---
 
-### 3. Access Table Names
+### 3. Query Tables with the Indexer
 
-Retrieve a list of all tables registered to the world:
+If the world is linked to a MUD Indexer, you can query tables directly.
 
 ```python
-table_names = sdk.get_table_names()
-print("Registered tables:", table_names)
+# Fetch all entries from the Inventory table
+inventories = world.indexer.Inventory.get()
+
+# Filter entries by playerId and itemId
+player_inventory = world.indexer.Inventory.get(playerId=PLAYER_ID, itemId=ITEM_ID)
+
+# Limit results
+limited_inventories = world.indexer.Inventory.get(limit=500)
 ```
+
+---
+
+### 4. Initialize a Player
+
+The `Player` class wraps interactions for a specific player.
+
+```python
+from mud import Player
+
+private_key = "0xYourPrivateKey"
+
+# Initialize the Player
+player = Player(private_key=private_key)
+
+# Link the World to the Player
+player.add_world(world, "cafecosmos")
+
+# Call functions directly through the Player
+player.cafecosmos.placeItem(x=1, y=1, z=1, itemId=100)
+```
+
+You can also load the private key from an environment variable:
+
+```python
+player = Player(env_key_name="PLAYER1")
+```
+
+---
+
+## Features
+
+- **Dynamic Table Registration**: Automatically register tables and schemas defined in a MUD configuration file.
+- **SQL-like Queries**: Query tables with filtering.
+- **Smart Contract Interactions**: Access world contract functions dynamically.
+- **Player-Specific Wrappers**: Automate transactions and player actions.
 
 ---
 
@@ -91,5 +159,3 @@ print("Registered tables:", table_names)
 1. Fork the repository.
 2. Create a new feature branch.
 3. Submit a pull request.
-
-
