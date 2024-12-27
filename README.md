@@ -1,5 +1,7 @@
 # mud-aw.py 🧱🐍
 
+A Python API for MUD worlds
+
 #### Python tools for:
  
 - Querying [MUD](https://mud.dev/) tables
