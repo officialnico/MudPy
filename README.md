@@ -22,7 +22,7 @@ A Python API for MUD worlds
 pip install mud-aw.py
 ```
 
-or build from source by cloning the repository and installing the dependencies:
+or build from source
 
 ```bash
 cd mud-aw.py
