@@ -24,8 +24,10 @@ pip install mud-aw.py
 
 or build from source by cloning the repository and installing the dependencies:
 
-`cd mud-aw.py`
-`pip install -e .`
+```bash
+cd mud-aw.py
+pip install -e .
+```
 
 ---
 
