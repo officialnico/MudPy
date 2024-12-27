@@ -34,6 +34,44 @@ pip install -e .
 
 ---
 
+## Possibilities
+
+```python
+from mud import World, Player
+from IPython.display import display
+
+#Create world objects
+biomes = World(rpc, world_address, abi_dir, indexer_url, mud_config_path)
+cafecosmos = World(c_rpc, c_world_address, c_abi_dir, c_indexer_url, c_mud_config_path)
+primodium = World(p_rpc, p_world_address, p_abi_dir, p_indexer_url, p_mud_config_path)
+
+#Load player(s) and link worlds
+player = Player(env_key_name="PLAYER1")
+player.add_world(biomes, "biomes")
+player.add_world(cafecosmos, "cafecosmos")
+player.add_world(cafecosmos, "primodium")
+
+#Execute onchain actions
+player.biomes.mine(...) 
+player.cafecosmos.placeItem(...)
+player.primodium.fight(...)
+
+#Query indexer
+player.biomes.indexer.Map.get(x=1, y=2, z=1) #filter by row
+player.cafecosmos.indexer.Inventory.get(landId=1337)
+player.primodium.indexer.Alliance.get() #returns every entry in that table
+
+#Download multiple or single world tables from the indexer as Pandas DataFrames
+biomes_tables_dfs = player.biomes.indexer.dl_tables_as_dataframes() #dl every table as dataframes
+cafecosmos_inventories_df = player.cafecosmos.indexer.Inventory.to_dataframe() #optionally add filters
+
+#Display DataFrames
+display(biomes_tables_dfs["Map"])
+display(cafecosmos_inventories_df)
+```
+
+---
+
 ## Key Components
 
 ### **MUD Indexer SDK**
