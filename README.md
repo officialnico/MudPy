@@ -18,11 +18,14 @@ A Python API for MUD worlds
 
 ## Installation
 
-Clone the repository and install dependencies:
-
 ```bash
 pip install mud-aw.py
 ```
+
+or build from source by cloning the repository and installing the dependencies:
+
+`cd mud-aw.py`
+`pip install -e .`
 
 ---
 
