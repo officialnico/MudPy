@@ -49,7 +49,7 @@ primodium = World(p_rpc, p_world_address, p_abi_dir, p_indexer_url, p_mud_config
 player = Player(env_key_name="PLAYER1")
 player.add_world(biomes, "biomes")
 player.add_world(cafecosmos, "cafecosmos")
-player.add_world(cafecosmos, "primodium")
+player.add_world(primodium, "primodium")
 
 #Execute onchain actions
 player.biomes.mine(...) 
