@@ -126,7 +126,7 @@ The `World` class connects to a MUD world and optionally integrates the MUD Inde
 ```python
 from mud import World
 
-abi_dir = "./path/to/abi"
+abi_dir = "./path/to/abis_directory"
 rpc = "https://rpc.mudchain.com"
 world_address = "0x123...abc"
 indexer_url = "https://indexer.mudchain.com"
