@@ -61,9 +61,9 @@ player.biomes.indexer.Map.get(x=1, y=2, z=1) #filter by row
 player.cafecosmos.indexer.Inventory.get(landId=1337)
 player.primodium.indexer.Alliance.get() #returns every entry in that table
 
-#Download multiple or single world tables from the indexer as Pandas DataFrames
+#Download multiple or single world tables from the indexer as Pandas DataFrames with optional filtering params
 biomes_tables_dfs = player.biomes.indexer.dl_tables_as_dataframes() #dl every table as dataframes
-cafecosmos_inventories_df = player.cafecosmos.indexer.Inventory.to_dataframe() #optionally add filters
+cafecosmos_inventories_df = player.cafecosmos.indexer.Inventory.to_dataframe() #dl individual tables
 
 #Display DataFrames
 display(biomes_tables_dfs["Map"])
