@@ -12,20 +12,28 @@ def parse_mud_config(file_path: str):
     with open(file_path, "r") as f:
         content = f.read()
     
-    # Extract tables and schemas
-    table_pattern = r"(\w+):\s*{\s*schema:\s*{([^}]+)},\s*key:\s*\[([^]]+)]"
+    # Updated regex pattern allowing empty keys
+    table_pattern = r"(\w+):\s*{\s*schema:\s*{([^}]+)},\s*key:\s*\[([^]]*)]"
     matches = re.findall(table_pattern, content)
 
     tables = {}
-    for table_name, schema_block, keys in matches:
+    for table_name, schema_block, keys_block in matches:
+        # Parse the schema
         schema = {
             k.strip(): v.strip().strip('"')
             for k, v in re.findall(r"(\w+):\s*\"?(\w+\[\]?|\w+)\"?", schema_block)
         }
-        keys = [k.strip().strip('"') for k in keys.split(",")]
+        
+        # Handle cases where keys_block is empty
+        if keys_block.strip():
+            keys = [k.strip().strip('"') for k in keys_block.split(",")]
+        else:
+            keys = []
+
         tables[table_name] = {"schema": schema, "key": keys}
 
     return tables
+
 
 
 class BaseTable:

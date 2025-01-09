@@ -49,6 +49,7 @@ class World:
             indexer_url (str, optional): URL for the indexer. If provided, initializes the indexer.
             mud_config_path (str, optional): Path to the mud.config.ts file. Required if indexer_url is provided.
         """
+        self.rpc = rpc
         self.w3 = Web3(Web3.HTTPProvider(rpc))
         self.chain_id = self.w3.eth.chain_id  # Automatically fetch the chain ID
         self.abis = load_abis(abis_dir)
@@ -130,3 +131,16 @@ class World:
                             raise new_error from None
                 raise e
         return wrapped_function
+
+    def add_contract(self, contract_name, address, abi):
+        """
+        Add a contract to the World instance.
+
+        Args:
+            address (str): The address of the contract.
+            abi (dict): The ABI of the contract.
+        """
+        if(not Web3.is_checksum_address(address)):
+            address = Web3.to_checksum_address(address)
+        contract = Web3(Web3.HTTPProvider(self.rpc)).eth.contract(address=address, abi=abi)
+        setattr(self, contract_name, contract)
