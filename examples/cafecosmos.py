@@ -4,11 +4,12 @@ import pandas as pd
 from thefuzz import process
 from IPython.display import HTML
 
-from mud import World, Player
+from mud import World as _World
+from mud import Player as _Player
 
 prefix = "./cafecosmos-contracts/icons/"
 
-def display_land(world: World, land_id: int):
+def display_land(world: _World, land_id: int):
     # 1) Get the land as a DataFrame
     df = get_land(world, land_id)
 
@@ -32,7 +33,7 @@ def display_land(world: World, land_id: int):
     # 7) Display inline in Jupyter (or return/print as needed)
     return HTML(html)
 
-def get_land(world: World, land_id: int) -> pd.DataFrame:
+def get_land(world: _World, land_id: int) -> pd.DataFrame:
     """
     Fetch land from the indexer, pick the topmost item (highest z, tie-break on
     placementtime), and return a 10×10 DataFrame of item IDs.
@@ -138,7 +139,7 @@ def add_external_contracts(world):
     world.add_contract("LandNFTs", external_contract_addresses[0]["landnftsaddress"], world.abis["LandNFTs"])
     world.add_contract("Vesting", external_contract_addresses[0]["vestingaddress"], world.abis["Vesting"])
 
-def display_inventory(world: World, land_id: int):
+def display_inventory(world: _World, land_id: int):
     """
     Display the inventory of a land with icons and quantities in a DataFrame,
     excluding rows that have 0 quantity.
@@ -207,15 +208,7 @@ def name_to_id_fuzzy(name: str, threshold: int = 80) -> int:
     
     raise Exception(f"Could not find a match for {name} with a score of {score}")
 
-
-def place_item(player: Player, land_id: int, x: int, y: int, item_id: int):
-    """
-    Place an item on a land at the specified coordinates.
-    """
-    # Call the placeItem function in the World contract
-
-    function_call = player.cafecosmos.placeItem(land_id, 5, 5, name_to_id_fuzzy("pink floor"), mode="raw")
-
+def _execute_function_call(player, function_call):
     # Estimate the gas required for the transaction
     estimated_gas = function_call.estimate_gas({
         "from": player.player_address,
@@ -226,7 +219,7 @@ def place_item(player: Player, land_id: int, x: int, y: int, item_id: int):
 
     # Build the transaction with estimated gas and gas price
     txn = function_call.build_transaction({
-        "chainId": player.cafecosmos.chain_id,  # Ethereum Mainnet
+        "chainId": player.cafecosmos.chain_id,  
         "gas": estimated_gas,
         "gasPrice": current_gas_price,
         "nonce": player.cafecosmos.w3.eth.get_transaction_count(player.player_address),
@@ -234,3 +227,86 @@ def place_item(player: Player, land_id: int, x: int, y: int, item_id: int):
 
     # Sign the transaction
     signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
+
+    # Send the transaction
+    txn_hash = player.cafecosmos.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+
+    if(player.cafecosmos.block_explorer_url is not None):
+        print(f"Transaction sent. TX:{player.cafecosmos.block_explorer_url}/tx/0x{txn_hash.hex()}")
+    else:
+        print(f"Transaction sent. TX hash:{txn_hash.hex()}")
+        
+    # Wait for receipt
+    txn_receipt = player.cafecosmos.w3.eth.wait_for_transaction_receipt(txn_hash)
+    # print("Transaction confirmed:", txn_receipt)
+
+
+def place_item(player: _Player, land_id: int, x: int, y: int, item_id: int):
+    """
+    Place an item on a land at the specified coordinates.
+    """
+    # Call the placeItem function in the _World contract
+    function_call = player.cafecosmos.placeItem(land_id, x, y, item_id, mode="raw")
+    _execute_function_call(player=player, function_call=function_call)
+    
+
+def get_inventory(world: _World, land_id: int) -> dict:
+    """
+    Fetch the inventory of a land and return it as a dictionary with item names
+    as keys and their quantities as values.
+    """
+    # Fetch inventory data for the land
+    inventory = world.indexer.Inventory.get(landId=land_id)
+
+    # Convert inventory data to a DataFrame
+    inventory_df = pd.DataFrame(inventory)
+    inventory_df["item"] = inventory_df["item"].astype(int)
+    inventory_df["quantity"] = inventory_df["quantity"].astype(int)
+
+    # Exclude rows where quantity is 0
+    inventory_df = inventory_df[inventory_df["quantity"] != 0]
+
+    # Load items.csv to build ID → Name mapping
+    items_df = get_items()
+    id_to_name = dict(zip(items_df["ID"].astype(int), items_df["Name"]))
+
+    # Add item names to the inventory DataFrame
+    inventory_df["name"] = inventory_df["item"].map(id_to_name)
+
+    # Convert the DataFrame to a dictionary
+    inventory_dict = dict(zip(inventory_df["name"], inventory_df["quantity"]))
+
+    return inventory_dict
+
+class World(_World):
+
+    def __init__(self, rpc, world_address, abis_dir, indexer_url=None, mud_config_path=None, block_explorer_url=None):
+        super().__init__(rpc, world_address, abis_dir, indexer_url, mud_config_path, block_explorer_url)
+        add_external_contracts(self)
+
+class Player(_Player):
+
+    def __init__(self, world, private_key = None, env_key_name = None, land_id = None):
+        super().__init__(private_key, env_key_name)
+        self.cafecosmos = world
+        add_external_contracts(world)
+
+        if(land_id is None):
+            land_id = find_player_lands(world, self.player_address, 1)
+            
+        self.land_id = land_id[0]
+
+    def display_land(self):
+        return display_land(self.cafecosmos, self.land_id)
+    
+    def display_inventory(self):
+        return display_inventory(self.cafecosmos, self.land_id)
+    
+    def place_item(self, x, y, item_name):
+        return place_item(self, self.land_id, x, y, name_to_id_fuzzy(item_name))
+    
+    def find_player_lands(self, amount_of_lands=0):
+        return find_player_lands(self.cafecosmos, self.player_address, amount_of_lands)
+
+    def get_inventory(self): 
+        return get_inventory(self.cafecosmos, self.land_id)
