@@ -140,7 +140,8 @@ def add_external_contracts(world):
 
 def display_inventory(world: World, land_id: int):
     """
-    Display the inventory of a land with icons and quantities in a DataFrame.
+    Display the inventory of a land with icons and quantities in a DataFrame,
+    excluding rows that have 0 quantity.
     """
     # Fetch inventory data for the land
     inventory = world.indexer.Inventory.get(landId=land_id)
@@ -149,6 +150,9 @@ def display_inventory(world: World, land_id: int):
     inventory_df = pd.DataFrame(inventory)
     inventory_df["item"] = inventory_df["item"].astype(int)
     inventory_df["quantity"] = inventory_df["quantity"].astype(int)
+
+    # Exclude rows where quantity is 0
+    inventory_df = inventory_df[inventory_df["quantity"] != 0]
 
     # Load items.csv to build ID → Name mapping
     items_df = get_items()
@@ -182,3 +186,23 @@ def display_inventory(world: World, land_id: int):
     # Convert to HTML and display
     html = display_df.to_html(escape=False, index=False)
     return HTML(html)
+
+def name_to_id_fuzzy(name: str, threshold: int = 80) -> int:
+    """
+    Given a (possibly misspelled) item name, return the best matching item ID
+    if the fuzzy match is ≥ threshold. Otherwise, return None.
+    """
+    # Load items.csv
+    items_df = get_items()  # Your existing function to load the CSV
+
+    # Build a dict: Name -> ID
+    name_to_id_map = dict(zip(items_df["Name"], items_df["ID"]))
+
+    # Find the best match
+    best_match, score = process.extractOne(name, name_to_id_map.keys())
+
+    # If score >= threshold, return its ID; else None
+    if score >= threshold:
+        return name_to_id_map[best_match]
+    
+    raise Exception(f"Could not find a match for {name} with a score of {score}")

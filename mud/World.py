@@ -116,7 +116,7 @@ class World:
     def _wrap_function(self, contract_function, func_name):
         def wrapped_function(*args, **kwargs):
             try:
-                return contract_function(*args, **kwargs).call()
+                return contract_function(*args, **kwargs)
             except Exception as e:
                 error_str = str(e)
                 if '0x' in error_str:
