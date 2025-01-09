@@ -206,3 +206,31 @@ def name_to_id_fuzzy(name: str, threshold: int = 80) -> int:
         return name_to_id_map[best_match]
     
     raise Exception(f"Could not find a match for {name} with a score of {score}")
+
+
+def place_item(player: Player, land_id: int, x: int, y: int, item_id: int):
+    """
+    Place an item on a land at the specified coordinates.
+    """
+    # Call the placeItem function in the World contract
+
+    function_call = player.cafecosmos.placeItem(land_id, 5, 5, name_to_id_fuzzy("pink floor"), mode="raw")
+
+    # Estimate the gas required for the transaction
+    estimated_gas = function_call.estimate_gas({
+        "from": player.player_address,
+    })
+
+    # Get the current gas price from the network
+    current_gas_price = player.cafecosmos.w3.eth.gas_price
+
+    # Build the transaction with estimated gas and gas price
+    txn = function_call.build_transaction({
+        "chainId": player.cafecosmos.chain_id,  # Ethereum Mainnet
+        "gas": estimated_gas,
+        "gasPrice": current_gas_price,
+        "nonce": player.cafecosmos.w3.eth.get_transaction_count(player.player_address),
+    })
+
+    # Sign the transaction
+    signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
