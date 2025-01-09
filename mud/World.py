@@ -124,17 +124,22 @@ class World:
             fn = contract_function(*args, **kwargs)
 
             def _parse_error_and_reraise(e):
-                # Centralized custom error decoding (same approach you already have)
+                """
+                Decode custom contract errors and re-raise them with a friendly message.
+                """
                 error_str = str(e)
                 if '0x' in error_str:
+                    # Match the full error hex
                     import re
-                    hex_match = re.search(r'0x[a-fA-F0-9]+', error_str)
+                    hex_match = re.search(r'0x[a-fA-F0-9]{8}', error_str)
                     if hex_match:
-                        selector = hex_match.group(0)[2:10]
+                        selector = hex_match.group(0)[2:10]  # Extract selector (first 4 bytes)
                         if selector in self.errors:
                             contract_name, error_name = self.errors[selector]
-                            error_msg = f"{error_name} when calling {func_name} with args={args}"
-                            raise type(e)(error_msg) from None
+                            raise ValueError(
+                                f"{error_name} error in contract '{contract_name}' when calling '{func_name}' with args={args}."
+                            ) from None
+                # If no match, re-raise the original error
                 raise e
 
             try:

@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 from thefuzz import process
 from IPython.display import HTML
+from typing import Optional, List, Dict
+from executing.executing import NotOneValueFound
+from web3.exceptions import ContractCustomError
 
 from mud import World as _World
 from mud import Player as _Player
@@ -209,37 +212,32 @@ def name_to_id_fuzzy(name: str, threshold: int = 80) -> int:
     raise Exception(f"Could not find a match for {name} with a score of {score}")
 
 def _execute_function_call(player, function_call):
-    # Estimate the gas required for the transaction
-    estimated_gas = function_call.estimate_gas({
-        "from": player.player_address,
-    })
+    try:
+        # Estimate gas and send the transaction
+        estimated_gas = function_call.estimate_gas({"from": player.player_address})
+        txn = function_call.build_transaction({
+            "chainId": player.cafecosmos.chain_id,
+            "gas": estimated_gas,
+            "gasPrice": player.cafecosmos.w3.eth.gas_price,
+            "nonce": player.cafecosmos.w3.eth.get_transaction_count(player.player_address),
+        })
+        signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
+        txn_hash = player.cafecosmos.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+        print(f"Transaction sent. TX hash: {txn_hash.hex()}")
+    except ContractCustomError as e:
+        # Extract error data from the exception (it is returned as a tuple)
+        error_data = e.args[0] if isinstance(e.args, tuple) else str(e)
+        selector = error_data[2:10]  # First 4 bytes (without the "0x" prefix)
 
-    # Get the current gas price from the network
-    current_gas_price = player.cafecosmos.w3.eth.gas_price
-
-    # Build the transaction with estimated gas and gas price
-    txn = function_call.build_transaction({
-        "chainId": player.cafecosmos.chain_id,  
-        "gas": estimated_gas,
-        "gasPrice": current_gas_price,
-        "nonce": player.cafecosmos.w3.eth.get_transaction_count(player.player_address),
-    })
-
-    # Sign the transaction
-    signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
-
-    # Send the transaction
-    txn_hash = player.cafecosmos.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
-
-    if(player.cafecosmos.block_explorer_url is not None):
-        print(f"Transaction sent. TX:{player.cafecosmos.block_explorer_url}/tx/0x{txn_hash.hex()}")
-    else:
-        print(f"Transaction sent. TX hash:{txn_hash.hex()}")
-        
-    # Wait for receipt
-    txn_receipt = player.cafecosmos.w3.eth.wait_for_transaction_receipt(txn_hash)
-    # print("Transaction confirmed:", txn_receipt)
-
+        # Match the selector in player.cafecosmos.errors
+        if selector in player.cafecosmos.errors:
+            error_info = player.cafecosmos.errors[selector]
+            error_name = error_info[1]
+            raise Exception(f"Transaction failed with custom error: {error_name}")
+        else:
+            raise Exception(f"Transaction failed with unknown custom error: {error_data}")
+    except Exception as e:
+        raise Exception(f"Transaction failed: {str(e)}")
 
 def place_item(player: _Player, land_id: int, x: int, y: int, item_id: int):
     """
@@ -248,7 +246,14 @@ def place_item(player: _Player, land_id: int, x: int, y: int, item_id: int):
     # Call the placeItem function in the _World contract
     function_call = player.cafecosmos.placeItem(land_id, x, y, item_id, mode="raw")
     _execute_function_call(player=player, function_call=function_call)
-    
+
+def create_land(player: _Player, limit_x: int, limit_y: int):
+    """
+    Create a new land for the player.
+    """
+    # Call the createLand function in the _World contract
+    function_call = player.cafecosmos.createLand(limitX=limit_x, limitY=limit_y, mode="raw")
+    _execute_function_call(player=player, function_call=function_call)
 
 def get_inventory(world: _World, land_id: int) -> dict:
     """
@@ -285,28 +290,134 @@ class World(_World):
         add_external_contracts(self)
 
 class Player(_Player):
-
-    def __init__(self, world, private_key = None, env_key_name = None, land_id = None):
+    def __init__(
+        self, 
+        world: _World, 
+        private_key: Optional[str] = None, 
+        env_key_name: Optional[str] = None, 
+        land_id: Optional[int] = None
+    ) -> None:
+        """
+        Initialize a Player instance.
+        
+        Args:
+            world (_World): The World object instance.
+            private_key (Optional[str]): The private key of the player (default: None).
+            env_key_name (Optional[str]): The environment key name for the private key (default: None).
+            land_id (Optional[int]): The land ID associated with the player (default: None).
+        """
         super().__init__(private_key, env_key_name)
-        self.cafecosmos = world
+        self.cafecosmos: _World = world
         add_external_contracts(world)
 
-        if(land_id is None):
-            land_id = find_player_lands(world, self.player_address, 1)
-            
-        self.land_id = land_id[0]
+        if land_id is None:
+            land_ids = find_player_lands(world, self.player_address, 1)
+            if not land_ids:
+                print("No lands found for the player... Create a new land with create_land(x, y) before proceeding.")
+            land_id = land_ids[0]
+        else:
+            if(self.cafecosmos.LandNFTs.functions.ownerOf(land_id).call() != self.player_address):
+                raise ValueError("The player does not own the specified land.")
+        
+        self.land_id: int = land_id
 
-    def display_land(self):
+    def display_land(self) -> HTML:
+        """
+        Display the land grid for the player's land.
+
+        Returns:
+            HTML: The HTML object containing the land grid.
+        """
         return display_land(self.cafecosmos, self.land_id)
     
-    def display_inventory(self):
+    def display_inventory(self) -> HTML:
+        """
+        Display the player's inventory with icons and quantities.
+
+        Returns:
+            HTML: The HTML object containing the inventory display.
+        """
         return display_inventory(self.cafecosmos, self.land_id)
     
-    def place_item(self, x, y, item_name):
-        return place_item(self, self.land_id, x, y, name_to_id_fuzzy(item_name))
+    def place_item(self, x: int, y: int, item_name: str) -> None:
+        """
+        Place an item on the player's land.
+
+        Args:
+            x (int): The x-coordinate to place the item.
+            y (int): The y-coordinate to place the item.
+            item_name (str): The name of the item to place.
+        """
+        # try:
+        place_item(self, self.land_id, x, y, name_to_id_fuzzy(item_name))
+        # except NotOneValueFound as e:
+        #     raise ValueError(f"You can't put '{item_name}' there! The slot might be full")
+
+    def create_land(self, limit_x: int, limit_y: int) -> None:
+        """
+        Create a new land for the player.
+
+        Args:
+            limit_x (int): The limit of the x-coordinate grid.
+            limit_y (int): The limit of the y-coordinate grid.
+        """
+        create_land(self, limit_x, limit_y)
+        print("Created land, setting new land ID...")
+        land_ids = find_player_lands(self.cafecosmos, self.player_address, 1)
+        if(not land_ids):
+            raise ValueError("No lands found for the player after creation.")
+        self.land_id = land_ids[0]
     
-    def find_player_lands(self, amount_of_lands=0):
+    def find_player_lands(self, amount_of_lands: int = 0) -> List[int]:
+        """
+        Find all lands owned by the player.
+
+        Args:
+            amount_of_lands (int): Maximum number of lands to find. Default is 0 (no limit).
+
+        Returns:
+            List[int]: A list of land IDs owned by the player.
+        """
         return find_player_lands(self.cafecosmos, self.player_address, amount_of_lands)
 
-    def get_inventory(self): 
+    def get_inventory(self) -> Dict[str, int]:
+        """
+        Get the player's inventory as a dictionary.
+
+        Returns:
+            Dict[str, int]: A dictionary where keys are item names and values are their quantities.
+        """
         return get_inventory(self.cafecosmos, self.land_id)
+    
+    def get_eth_balance(self) -> int:
+        """
+        Get the player's balance.
+
+        Returns:
+            int: The player's balance.
+        """
+        return self.cafecosmos.w3.eth.get_balance(self.player_address)
+
+    def get_leaderboard(self) -> pd.DataFrame:
+        """
+        Get the leaderboard of players.
+
+        Returns:
+            pd.DataFrame: The leaderboard DataFrame.
+        """
+        leaderboard = self.cafecosmos.indexer.PlayerTotalEarned.get()
+        
+    def transfer_eth(self, to_address: str, amount: int) -> None:
+        """
+        Transfer ETH to another address.
+
+        Args:
+            to_address (str): The recipient address.
+            amount (int): The amount of ETH to transfer.
+        """
+        function_call = self.cafecosmos.w3.eth.send_transaction({
+            "from": self.player_address,
+            "to": to_address,
+            "value": amount,
+        })
+        _execute_function_call(self, function_call)
