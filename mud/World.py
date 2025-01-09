@@ -60,9 +60,11 @@ class World:
             self.contract = self.w3.eth.contract(address=world_address, abi=self.abis["IWorld"])
             self.errors = self._extract_all_errors()
 
-            for func_name in dir(self.contract.functions):
-                if not func_name.startswith("_"):
-                    original_function = getattr(self.contract.functions, func_name)
+            # Wrap only functions in the ABI
+            abi_functions = [item['name'] for item in self.abis["IWorld"] if item['type'] == 'function']
+            for func_name in abi_functions:
+                original_function = getattr(self.contract.functions, func_name, None)
+                if original_function:
                     setattr(self, func_name, self._wrap_function(original_function, func_name))
         else:
             raise Exception("IWorld ABI not found")
@@ -80,7 +82,6 @@ class World:
             world_address (str): The address of the World contract.
             mud_config_path (str): Path to the mud.config.ts file.
         """
-        from mud import MUDIndexerSDK  # Assuming MUDIndexerSDK is part of your mud package
 
         # Create the indexer
         indexer = MUDIndexerSDK(indexer_url, world_address, mud_config_path)
@@ -114,10 +115,15 @@ class World:
         return errors
 
     def _wrap_function(self, contract_function, func_name):
-        def wrapped_function(*args, **kwargs):
-            try:
-                return contract_function(*args, **kwargs)
-            except Exception as e:
+        def wrapped_function(*args, mode="raw", tx_opts=None, **kwargs):
+            """
+            mode: "raw" (default), "call", "transact", "estimateGas", "buildTransaction"
+            tx_opts: dict for transaction-related options if needed
+            """
+            fn = contract_function(*args, **kwargs)
+
+            def _parse_error_and_reraise(e):
+                # Centralized custom error decoding (same approach you already have)
                 error_str = str(e)
                 if '0x' in error_str:
                     import re
@@ -125,12 +131,29 @@ class World:
                     if hex_match:
                         selector = hex_match.group(0)[2:10]
                         if selector in self.errors:
-                            contract, error = self.errors[selector]
-                            error_msg = f"{error} when calling {func_name}"
-                            new_error = type(e)((error_msg,))
-                            raise new_error from None
+                            contract_name, error_name = self.errors[selector]
+                            error_msg = f"{error_name} when calling {func_name} with args={args}"
+                            raise type(e)(error_msg) from None
                 raise e
+
+            try:
+                if mode == "raw":
+                    return fn  # raw function object
+                elif mode == "call":
+                    return fn.call(tx_opts or {})
+                elif mode == "transact":
+                    return fn.transact(tx_opts or {})
+                elif mode == "estimate_gas":
+                    return fn.estimate_gas(tx_opts or {})
+                elif mode == "build_transaction":
+                    return fn.build_transaction(tx_opts or {})
+                else:
+                    raise ValueError(f"Unknown mode: {mode}")
+            except Exception as e:
+                _parse_error_and_reraise(e)
+
         return wrapped_function
+
 
     def add_contract(self, contract_name, address, abi):
         """
@@ -144,3 +167,5 @@ class World:
             address = Web3.to_checksum_address(address)
         contract = Web3(Web3.HTTPProvider(self.rpc)).eth.contract(address=address, abi=abi)
         setattr(self, contract_name, contract)
+
+    
