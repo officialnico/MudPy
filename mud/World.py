@@ -38,7 +38,7 @@ def load_abis(root_dir) -> dict:
     return abis
 
 class World:
-    def __init__(self, rpc, world_address, abis_dir, indexer_url=None, mud_config_path=None):
+    def __init__(self, rpc, world_address, abis_dir, indexer_url=None, mud_config_path=None, block_explorer_url=None):
         """
         Initialize the World instance.
 
@@ -54,6 +54,7 @@ class World:
         self.chain_id = self.w3.eth.chain_id  # Automatically fetch the chain ID
         self.abis = load_abis(abis_dir)
         self.indexer = None
+        self.block_explorer_url = block_explorer_url
 
         # Initialize the contract
         if "IWorld" in self.abis:
