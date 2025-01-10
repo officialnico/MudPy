@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from thefuzz import process
 from IPython.display import HTML
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from executing.executing import NotOneValueFound
 from web3.exceptions import ContractCustomError
 from web3 import Web3
@@ -204,6 +204,49 @@ class Player(_Player):
             pd.DataFrame: A DataFrame of transformations that can be unlocked.
         """
         return get_unlockable_transformations(self.cafecosmos, self.land_id)
+
+    def get_unlockable_transformations(self) -> Dict[str, Optional[List[Tuple[int, int]]]]:
+        unlockable_transformations = self.cafecosmos.indexer.Transformations.get(input=0)
+        player_land = self.cafecosmos.indexer.LandItem.get(landId=self.land_id)
+        timestamp = self.cafecosmos.w3.eth.get_block('latest').timestamp
+
+        coordinates = []
+        closest_unlock_time = None
+
+        for item in player_land:
+            # Extract the item ID from the player's land item
+            item_id = str(item["itemid"])  # Ensure item_id is a string to match the data type in unlockable_transformations
+
+            # Find the matching transformation in unlockable_transformations
+            matching_transformation = next(
+                (transformation for transformation in unlockable_transformations if transformation.get('base') == item_id),
+                None
+            )
+
+            if matching_transformation:
+                # Retrieve the unlocktime and calculate based on placementtime
+                unlocktime = int(matching_transformation.get('unlocktime', 0))
+                placementtime = int(item.get('placementtime', 0))
+                total_unlock_time = unlocktime + placementtime
+
+                # Check if the unlock time has passed
+                is_unlockable = total_unlock_time < timestamp
+
+                if not is_unlockable:
+                    if closest_unlock_time is None or total_unlock_time < closest_unlock_time:
+                        closest_unlock_time = total_unlock_time
+
+                coordinates.append((int(item['x']), int(item['y'])))
+            
+        return {
+            "coordinates": coordinates,
+            "nextUnlock": closest_unlock_time
+        }
+    
+    def unlock_all(self):
+        coordinates = self.get_unlockable_transformations()['coordinates']
+        for coord in coordinates:
+            self.place_item(coord[0],coord[1],"unlock")
 
 ### Helper functions ###
 
