@@ -8,6 +8,7 @@ from executing.executing import NotOneValueFound
 from web3.exceptions import ContractCustomError
 from web3 import Web3
 from eth_abi.packed import encode_packed
+import time
 
 from mud import World as _World
 from mud import Player as _Player
@@ -191,20 +192,7 @@ class Player(_Player):
         """
         items_df = get_items()
         return items_df[items_df["ID"] == id]["Name"].values[0]
-
-    def get_unlockable_transformations(self) -> pd.DataFrame:
-        """
-        Determine which transformations can be unlocked based on the player's land inventory.
-
-        Args:
-            world (World): The world object containing indexers.
-            land_id (int): The ID of the player's land.
-
-        Returns:
-            pd.DataFrame: A DataFrame of transformations that can be unlocked.
-        """
-        return get_unlockable_transformations(self.cafecosmos, self.land_id)
-
+    
     def get_unlockable_transformations(self) -> Dict[str, Optional[List[Tuple[int, int]]]]:
         unlockable_transformations = self.cafecosmos.indexer.Transformations.get(input=0)
         player_land = self.cafecosmos.indexer.LandItem.get(landId=self.land_id)
@@ -214,40 +202,91 @@ class Player(_Player):
         closest_unlock_time = None
 
         for item in player_land:
-            # Extract the item ID from the player's land item
-            item_id = str(item["itemid"])  # Ensure item_id is a string to match the data type in unlockable_transformations
+            item_id = str(item["itemid"])
 
-            # Find the matching transformation in unlockable_transformations
+            # Find the matching transformation
             matching_transformation = next(
                 (transformation for transformation in unlockable_transformations if transformation.get('base') == item_id),
                 None
             )
 
             if matching_transformation:
-                # Retrieve the unlocktime and calculate based on placementtime
                 unlocktime = int(matching_transformation.get('unlocktime', 0))
                 placementtime = int(item.get('placementtime', 0))
                 total_unlock_time = unlocktime + placementtime
 
-                # Check if the unlock time has passed
-                is_unlockable = total_unlock_time < timestamp
-
-                if not is_unlockable:
+                # Adjust unlock logic to add a safety margin
+                if total_unlock_time <= timestamp:
+                    # Add to unlockable coordinates
+                    coordinates.append((int(item['x']), int(item['y'])))
+                else:
+                    # Track the closest future unlock time
                     if closest_unlock_time is None or total_unlock_time < closest_unlock_time:
                         closest_unlock_time = total_unlock_time
 
-                coordinates.append((int(item['x']), int(item['y'])))
-            
         return {
             "coordinates": coordinates,
             "nextUnlock": closest_unlock_time
         }
     
     def unlock_all(self):
-        coordinates = self.get_unlockable_transformations()['coordinates']
-        for coord in coordinates:
-            self.place_item(coord[0],coord[1],"unlock")
+        unlock_data = self.get_unlockable_transformations()
+        coordinates = unlock_data['coordinates']
+        failed_items = []
 
+        for coord in coordinates:
+            try:
+                # Ensure a recheck of the unlock condition before unlocking
+                unlock_data = self.get_unlockable_transformations()
+                if coord not in unlock_data['coordinates']:
+                    print(f"Skipping {coord}: Not unlockable anymore.")
+                    continue
+
+                self.place_item(coord[0], coord[1], "unlock")
+                print(f"Unlocked item at coordinates {coord}")
+            except Exception as e:
+                print(f"Failed to unlock item at coordinates {coord}: {e}")
+                failed_items.append(coord)
+        
+        # Return failed items for potential retries
+        return failed_items
+
+    def auto_farm(self):
+        while True:
+            unlock_data = self.get_unlockable_transformations()
+            coordinates = unlock_data["coordinates"]
+            next_unlock_time = unlock_data["nextUnlock"]
+
+            if coordinates:
+                print(f"Unlocking {len(coordinates)} items...")
+                failed_items = self.unlock_all()
+
+                # Retry failed items if needed
+                if failed_items:
+                    print(f"Retrying {len(failed_items)} failed items...")
+                    for coord in failed_items:
+                        try:
+                            # Recheck unlock condition before retry
+                            unlock_data = self.get_unlockable_transformations()
+                            if coord not in unlock_data['coordinates']:
+                                print(f"Skipping retry for {coord}: Not unlockable anymore.")
+                                continue
+
+                            self.place_item(coord[0], coord[1], "unlock")
+                            print(f"Retried and unlocked item at coordinates {coord}")
+                        except Exception as e:
+                            print(f"Retry failed for item at coordinates {coord}: {e}")
+            
+            if next_unlock_time:
+                # Wait until the next unlock time with a small buffer
+                wait_time = max(0, next_unlock_time - time.time() + 1)  # Add a 1-second safety margin
+                print(f"Waiting {wait_time:.2f} seconds for the next unlock...")
+                time.sleep(wait_time)
+            else:
+                # No unlock time available, wait a default interval
+                print("No unlockable items. Retrying in 30 seconds...")
+                time.sleep(30)
+                
 ### Helper functions ###
 
 def display_land(world: World, land_id: int):
