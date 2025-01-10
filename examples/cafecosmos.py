@@ -80,7 +80,12 @@ class Player(_Player):
             y (int): The y-coordinate to place the item.
             item_name (str): The name of the item to place.
         """
-        place_item(self, self.land_id, x, y, name_to_id_fuzzy(item_name))
+        if(item_name=="unlock"):
+            item_id=0
+        else: 
+            item_id=name_to_id_fuzzy(item_name)
+        
+        place_item(self, self.land_id, x, y, item_id)
 
     def create_land(self, limit_x: int, limit_y: int) -> None:
         """
@@ -159,8 +164,8 @@ class Player(_Player):
             item_name (str): The name of the item to craft.
         """
         item_id = name_to_id_fuzzy(item_name)
-        # for _ in range(quantity):
-        craft_item_recursive(player=self, item_id=item_id, quantity=quantity)
+        for _ in range(quantity):
+            _craft_item(player=self, item_id=item_id)
         
     def get_craftable(self) -> pd.DataFrame:
         """
@@ -186,6 +191,19 @@ class Player(_Player):
         """
         items_df = get_items()
         return items_df[items_df["ID"] == id]["Name"].values[0]
+
+    def get_unlockable_transformations(self) -> pd.DataFrame:
+        """
+        Determine which transformations can be unlocked based on the player's land inventory.
+
+        Args:
+            world (World): The world object containing indexers.
+            land_id (int): The ID of the player's land.
+
+        Returns:
+            pd.DataFrame: A DataFrame of transformations that can be unlocked.
+        """
+        return get_unlockable_transformations(self.cafecosmos, self.land_id)
 
 ### Helper functions ###
 
@@ -424,7 +442,14 @@ def _execute_function_call(player, function_call):
         })
         signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
         txn_hash = player.cafecosmos.w3.eth.send_raw_transaction(signed_txn.raw_transaction)
-        print(f"Transaction sent. TX hash: {txn_hash.hex()}")
+
+        if(player.cafecosmos.block_explorer_url is not None):
+            print(f"Transaction sent: {player.cafecosmos.block_explorer_url}/tx/0x{txn_hash.hex()}")
+            receipt = player.cafecosmos.w3.eth.wait_for_transaction_receipt(txn_hash, timeout=120)
+            print(f"Transaction confirmed in block: {receipt['blockNumber']}")
+        else:
+            print(f"Transaction sent. TX hash: {txn_hash.hex()}")
+
     except ContractCustomError as e:
         # Extract error data from the exception (it is returned as a tuple)
         error_data = e.args[0] if isinstance(e.args, tuple) else str(e)
@@ -440,50 +465,15 @@ def _execute_function_call(player, function_call):
     except Exception as e:
         raise Exception(f"Transaction failed: {str(e)}")
 
-def _execute_batch_call(player, batch_calls):
-    # Execute the batchCall
-    try:
-        print(f"Executing batch call with {len(batch_calls)} crafting calls...")
-
-        # Prepare the systemCalls parameter
-        system_calls = batch_calls  # No further transformation is needed
-
-        # Build the transaction
-        txn = player.cafecosmos.batchCall(system_calls).build_transaction(
-            {
-                "from": player.player_address,
-                "gasPrice": player.cafecosmos.w3.eth.gas_price,
-                "nonce": player.cafecosmos.w3.eth.get_transaction_count(player.player_address),
-            }
-        )
-
-        # Sign and send the transaction
-        signed_txn = player.cafecosmos.w3.eth.account.sign_transaction(txn, player.private_key)
-        txn_hash = player.cafecosmos.w3.eth.send_raw_transaction(signed_txn.rawTransaction)
-
-        print(f"Batch transaction sent. TX hash: {txn_hash.hex()}")
-    except ContractCustomError as e:
-        # Extract error data from the exception (it is returned as a tuple)
-        error_data = e.args[0] if isinstance(e.args, tuple) else str(e)
-        selector = error_data[2:10]  # First 4 bytes (without the "0x" prefix)
-
-        # Match the selector in player.cafecosmos.errors
-        if selector in player.cafecosmos.errors:
-            error_info = player.cafecosmos.errors[selector]
-            error_name = error_info[1]
-            raise Exception(f"Transaction failed with custom error: {error_name}")
-        else:
-            raise Exception(f"Transaction failed with unknown custom error: {error_data}")
-    except Exception as e:
-        raise Exception(f"Transaction failed: {str(e)}")
-
-def place_item(player: Player, land_id: int, x: int, y: int, item_id: int):
+def place_item(player: Player, land_id: int, x: int, y: int, item_id: int, display=True):
     """
     Place an item on a land at the specified coordinates.
     """
     # Call the placeItem function in the World contract
     function_call = player.cafecosmos.placeItem(land_id, x, y, item_id, mode="raw")
     _execute_function_call(player=player, function_call=function_call)
+    if(display):
+        display_land(player.cafecosmos, land_id)
 
 def create_land(player: Player, limit_x: int, limit_y: int):
     """
@@ -528,69 +518,6 @@ def get_inventory(world: World, land_id: int) -> dict:
     inventory_dict = dict(zip(inventory_df["name"], inventory_df["quantity"]))
 
     return inventory_dict
-
-def craft_item_recursive(player: Player, item_id: int, quantity: int):
-    """
-    Recursively craft an item using batchCall, automatically handling intermediate crafting steps.
-
-    Args:
-        player (Player): The player instance performing the crafting.
-        item_id (int): The ID of the item to craft.
-        quantity (int): The quantity of the item to craft.
-    """
-    items_to_craft = {item_id: quantity}
-    batch_calls = []  # List to store all batch calls
-
-    def _craft_item_recursive(player: Player, item_id: int):
-        # Get all crafting recipes
-        recipes = player.cafecosmos.indexer.CraftingRecipe.get()
-
-        # Find the recipe for the desired item
-        recipe = next((r for r in recipes if int(r["output"]) == item_id), None)
-        if not recipe:
-            return
-
-        # Check the player's inventory
-        inventory = player.get_inventory()
-        current_quantity = inventory.get(item_id, 0)
-
-        # If the item is already in inventory, no need to craft it
-        if current_quantity > 0:
-            return
-
-        # Recursively craft all required inputs
-        for input_id, quantity_needed in zip(recipe["inputs"], recipe["quantities"]):
-            input_id = int(input_id)
-            quantity_needed = int(quantity_needed)
-            input_quantity = inventory.get(input_id, 0)
-
-            # Craft the necessary quantity of the input
-            if input_quantity < quantity_needed:
-                missing_quantity = quantity_needed - input_quantity
-                for _ in range(missing_quantity):
-                    _craft_item_recursive(player, input_id)
-
-        # Add the crafting call for the current item to the batch
-        print(f"Adding batch call to craft item ID {item_id}")
-        craft_function_data = player.cafecosmos.contract.functions.craftRecipe(
-            player.land_id, item_id
-        ).build_transaction({"from": player.player_address})["data"]
-
-        # Encode the system ID (use namespace if applicable)
-        crafting_system_id = get_system_resource_id("Crafting")
-
-        # Append the crafting call to the batch
-        batch_calls.append(
-            (
-                Web3.to_bytes(hexstr=crafting_system_id.hex()),  # Convert to bytes32
-                Web3.to_bytes(hexstr=craft_function_data),  # Convert to bytes
-            )
-        )
-
-    # Start the recursive crafting process
-    _craft_item_recursive(player, item_id)
-
-    _execute_batch_call(player, batch_calls)
 
 def get_craftable(player: Player) -> pd.DataFrame:
     """
@@ -659,3 +586,71 @@ def get_craftable(player: Player) -> pd.DataFrame:
 
 
     return craftable_df
+
+# def get_unlockable_transformations(world: World, land_id: int) -> pd.DataFrame:
+#     """
+#     Determine which transformations can be unlocked based on the player's land inventory.
+
+#     Args:
+#         world (World): The world object containing indexers.
+#         land_id (int): The ID of the player's land.
+
+#     Returns:
+#         pd.DataFrame: A DataFrame of transformations that can be unlocked.
+#     """
+#     # Fetch land items
+#     land_items = world.indexer.LandItem.get(landId=land_id)
+#     transformations = world.indexer.Transformations.get()
+#     timestamp = world.w3.eth.get_block('latest').timestamp
+
+#     # Count the available items on the land
+
+
+#     for item in land_items:
+#         item_id = int(item["itemid"])
+#         if item_id == 0:  # Ignore placeholder or empty items
+#             continue
+#         if(item)
+
+#     # print("land_inventory", land_inventory)
+#     # Determine unlockable transformations
+#     unlockable = []
+#     for trans in transformations:
+#         input_id = int(trans["input"])
+#         required_quantity = int(trans.get("yieldquantity", 1))  # Default to 1 if not specified
+#         if input_id in land_inventory and land_inventory[input_id] >= required_quantity:
+#             unlockable.append({
+#                 "Base": int(trans["base"]),
+#                 "Input": input_id,
+#                 "Next": int(trans["next"]),
+#                 "Yield": int(trans["yield"]),
+#                 "YieldQuantity": required_quantity,
+#                 "UnlockTime": int(trans["unlocktime"]),
+#                 "Timeout": int(trans["timeout"]),
+#                 "IsRecipe": trans["isrecipe"],
+#                 "IsWaterCollection": trans["iswatercollection"],
+#                 "XP": int(trans["xp"]),
+#                 "Exists": trans["exists"]
+#             })
+
+#     # Convert to DataFrame
+#     unlockable_df = pd.DataFrame(unlockable)
+#     if unlockable_df.empty:
+#         print("No transformations can be unlocked.")
+#     else:
+#         unlockable_df.sort_values(by=["Base", "Input"], inplace=True)
+
+#     return unlockable_df
+
+# def get_time_to_unlock(player: Player) -> pd.DataFrame:
+    
+    
+
+# def collect_all(player: Player):
+#     """
+#     Collect all collectable resources from the player's land.
+#     """
+#     # Call the collectAll function in the World contract
+    
+#     function_call = player.cafecosmos.collectAll(player.land_id, mode="raw")
+#     _execute_function_call(player=player, function_call=function_call)
