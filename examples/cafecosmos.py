@@ -211,24 +211,37 @@ def display_land(world: World, land_id: int):
     # 1) Get the land as a DataFrame
     df = get_land(world, land_id)
 
-    # 2) Load items.csv and build ID → Name dictionary
+    # 2) Load items.csv and build ID → Name and Name → ID dictionaries
     items_df = get_items()
     id_to_property = dict(zip(items_df["ID"], items_df["Name"]))
+    property_to_id = {v: k for k, v in id_to_property.items()}
 
     # 3) Build the list of icon “base names” (filenames without .png)
     icon_files = os.listdir(prefix)
     icon_bases = [os.path.splitext(filename)[0] for filename in icon_files]
 
-    # 4) Convert item IDs to icon paths (where possible)
-    df_icons = df.applymap(lambda val: _replace_with_icons(val, id_to_property, icon_bases))
+    # 4) Get coordinates for each cell
+    def format_cell(val, x, y, z):
+        # Replace with icon path if possible
+        icon_path = _replace_with_icons(val, id_to_property, icon_bases)
+        # Get the corresponding item ID and name for the tooltip
+        item_id = val if isinstance(val, (int, float)) else None
+        item_name = id_to_property.get(item_id, "Unknown")
+        coordinates = (x, y)
+        # Return the HTML with the tooltip
+        return path_to_image_html(icon_path, item_id, item_name, coordinates)
 
-    # 5) Create a copy of your DataFrame and apply the formatter to every cell
-    df_display = df_icons.applymap(path_to_image_html)
+    # Apply the formatter to the DataFrame
+    df_display = df.copy()
+    for index, row in df.iterrows():
+        for col in df.columns:
+            x, y, z = col, index, 0  # Assuming x = column, y = row, and z = 0 (if not provided)
+            df_display.at[index, col] = format_cell(df.at[index, col], x, y, z)
 
-    # 6) Convert to HTML, making sure to disable HTML-escaping
+    # 5) Convert to HTML, making sure to disable HTML-escaping
     html = df_display.to_html(escape=False)
 
-    # 7) Display inline in Jupyter (or return/print as needed)
+    # 6) Display inline in Jupyter (or return/print as needed)
     return HTML(html)
 
 def get_land(world: World, land_id: int) -> pd.DataFrame:
@@ -306,13 +319,29 @@ def _replace_with_icons(val, id_to_property, icon_bases):
     else:
         return os.path.join(prefix, icon_filename)
 
-def path_to_image_html(path):
+def path_to_image_html(path, item_id=None, item_name=None, coordinates=None):
     """
-    If the cell has a string ending in .png, return an HTML <img> tag.
-    Otherwise, return the original value.
+    Converts a cell value into an HTML <img> tag with a tooltip showing the item ID, name, and coordinates.
+
+    Args:
+        path (str): Path to the image file.
+        item_id (int, optional): The item ID to include in the tooltip.
+        item_name (str, optional): The name of the item to include in the tooltip.
+        coordinates (tuple, optional): The (x, y, z) coordinates of the item.
+
+    Returns:
+        str: An HTML <img> tag with a tooltip if it's an image path; otherwise, the original value.
     """
     if isinstance(path, str) and path.endswith(".png"):
-        return f'<img src="{path}" width="50"/>'
+        tooltip_parts = []
+        if item_name:
+            tooltip_parts.append(f"Name: {item_name}")
+        if item_id:
+            tooltip_parts.append(f"Item ID: {item_id}")
+        if coordinates:
+            tooltip_parts.append(f"Coordinates: {coordinates}")
+        tooltip = " | ".join(tooltip_parts) if tooltip_parts else "Unknown Item"
+        return f'<img src="{path}" title="{tooltip}" width="50"/>'
     else:
         return path
 
