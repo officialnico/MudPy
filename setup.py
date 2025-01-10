@@ -13,13 +13,9 @@ setup(
     install_requires=[
         "requests>=2.25.1",
         "web3",
-        "pathlib",
-        "json",
         "dotenv",
-        "typing",
         "pandas",
         "IPython",
-        "logging",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
