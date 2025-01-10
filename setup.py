@@ -13,7 +13,7 @@ setup(
     install_requires=[
         "requests>=2.25.1",
         "web3",
-        "dotenv",
+        "python-dotenv>=0.21.0",
         "pandas",
         "IPython",
     ],
